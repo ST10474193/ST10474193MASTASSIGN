@@ -1,0 +1,396 @@
+import { StatusBar } from 'expo-status-bar';
+import React, { useState, useEffect } from 'react';
+import { StyleSheet, Text, View, FlatList, SafeAreaView, Platform, StatusBar as RNStatusBar, Button, TextInput, Alert, TouchableOpacity, ImageBackground } from 'react-native';
+
+
+interface IMenuItem {
+    id: number;
+    name: string;      // 1a. Dish name
+    description: string; // 1b. Description
+    course: TCourse;   // 1c. Select the course
+    price: number;     // 1d. Price
+}
+
+type TCourse = 'Starters' | 'Mains' | 'Dessert' | 'Beverages';
+class MenuManager {
+    private menuItems: IMenuItem[] = [];
+    public readonly COURSE_OPTIONS: TCourse[] = ['Starters', 'Mains', 'Dessert', 'Beverages'];
+
+    constructor() {
+        // Pre-inserted food items
+        this.menuItems = [
+            { id: 101, name: "Margherita Pizza", description: "Classic Italian pizza.", course: "Mains", price: 12.99 },
+            { id: 102, name: "Chocolate Cake", description: "Rich, moist dark chocolate layer cake.", course: "Dessert", price: 6.99 },
+            { id: 103, name: "Veggie Spring Rolls", description: "Crispy fried rolls.", course: "Starters", price: 4.50 }
+        ];
+    }
+
+    public addMenuItem(name: string, description: string, course: TCourse, price: number): IMenuItem {
+        // Input Validation
+        if (!name || !description || !course || typeof price !== 'number' || price <= 0) {
+            throw new Error("Invalid input: All fields are required and must be valid.");
+        }
+        if (!this.COURSE_OPTIONS.includes(course)) {
+            throw new Error(`Invalid course: "${course}". Must be one of ${this.COURSE_OPTIONS.join(', ')}`);
+        }
+
+        const newItem: IMenuItem = {
+            id: Date.now(),
+            name: name.trim(),
+            description: description.trim(),
+            course: course,
+            price: parseFloat(price.toFixed(2))
+        };
+
+        this.menuItems.push(newItem);
+        return newItem;
+    }
+
+    public getMenu(): IMenuItem[] {
+        return [...this.menuItems]; 
+    }
+
+    public getTotalItemCount(): number {
+        return this.menuItems.length;
+    }
+}
+
+// Instantiate the manager once outside the component. This acts as our "database".
+const menuManager = new MenuManager();
+
+const BACKGROUND_IMAGE_URL = 'https://images.unsplash.com/photo-1540189549336-e6e99c3679fe?auto=format&fit=crop&w=800&q=60';
+
+/**
+ * A form component for adding a new menu item.
+ */
+function AddMenuItemForm({ onAddItem, onCancel }: { onAddItem: (item: Omit<IMenuItem, 'id'>) => void, onCancel: () => void }) {
+    const [name, setName] = useState('');
+    const [description, setDescription] = useState('');
+    const [price, setPrice] = useState('');
+    const [course, setCourse] = useState<TCourse>('Starters');
+
+    const handleSubmit = () => {
+        const priceNumber = parseFloat(price);
+        if (!name || !description || !course || isNaN(priceNumber) || priceNumber <= 0) {
+            Alert.alert("Invalid Input", "Please fill all fields correctly. Price must be a positive number.");
+            return;
+        }
+        if (!menuManager.COURSE_OPTIONS.includes(course)) {
+            Alert.alert("Invalid Course", `Course must be one of: ${menuManager.COURSE_OPTIONS.join(', ')}`);
+            return;
+        }
+
+        onAddItem({ name, description, course, price: priceNumber });
+
+        // Clear form
+        setName('');
+        setDescription('');
+        setPrice('');
+        setCourse('Starters');
+    };
+
+    return (
+        <View style={styles.formContainer}>
+            <Text style={styles.header}>Add New Menu Item</Text>
+            <TextInput
+                style={styles.input}
+                placeholder="Dish Name (e.g., Caesar Salad)"
+                value={name}
+                onChangeText={setName}
+            />
+            <TextInput
+                style={styles.input}
+                placeholder="Description"
+                value={description}
+                onChangeText={setDescription}
+                multiline
+            />
+            <TextInput
+                style={styles.input}
+                placeholder="Course (Starters, Mains, Dessert, Beverages)"
+                value={course}
+                onChangeText={(text) => setCourse(text as TCourse)}
+                autoCapitalize="words"
+            />
+            <TextInput
+                style={styles.input}
+                placeholder="Price (e.g., 12.99)"
+                value={price}
+                onChangeText={setPrice}
+                keyboardType="numeric"
+            />
+            <View style={styles.buttonGroup}>
+                <Button title="Cancel" onPress={onCancel} color="#ff6347" />
+                <Button title="Add Item" onPress={handleSubmit} />
+            </View>
+        </View>
+    );
+}
+
+/**
+ * A simple login page.
+ */
+function LoginPage({ onLoginSuccess }: { onLoginSuccess: (role: 'user' | 'chef') => void }) {
+    const [username, setUsername] = useState('');
+    const [password, setPassword] = useState('');
+
+    const handleLogin = () => {
+        // In a real app, you would call an authentication service.
+        // For this demo, we use hardcoded credentials for two roles.
+        const user = username.toLowerCase();
+        if (user === 'chef' && password === 'chefpass') {
+            onLoginSuccess('chef');
+        } else if (user === 'user' && password === 'password') {
+            onLoginSuccess('user');
+        } else {
+            Alert.alert('Login Failed', 'Invalid credentials. Use "user/password" or "chef/chefpass".');
+        }
+    };
+
+    return (
+        <View style={styles.formContainer}>
+            <Text style={styles.header}>Welcome Back!</Text>
+            <TextInput
+                style={styles.input}
+                placeholder="Username (hint: user or chef)"
+                value={username}
+                onChangeText={setUsername}
+                autoCapitalize="none"
+            />
+            <TextInput
+                style={styles.input}
+                placeholder="Password (hint: password)"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry
+            />
+            <Button title="Login" onPress={handleLogin} />
+        </View>
+    );
+}
+
+/**
+ * A simple payment page.
+ */
+function PaymentPage({ menuItems, onBack }: { menuItems: IMenuItem[], onBack: () => void }) {
+    const total = menuItems.reduce((sum, item) => sum + item.price, 0);
+
+    const handlePayment = () => {
+        // In a real app, this would integrate with a payment gateway.
+        Alert.alert(
+            "Payment Successful",
+            `Thank you for your payment of $${total.toFixed(2)}!`,
+            [{ text: "OK", onPress: onBack }]
+        );
+    };
+
+    return (
+        <View style={styles.formContainer}>
+            <Text style={styles.header}>Checkout</Text>
+            <Text style={styles.paymentSummary}>Total Items: {menuItems.length}</Text>
+            <Text style={styles.paymentSummary}>Total Amount: ${total.toFixed(2)}</Text>
+            <TextInput style={styles.input} placeholder="Card Number" keyboardType="numeric" />
+            <TextInput style={styles.input} placeholder="MM/YY" keyboardType="numeric" />
+            <TextInput style={styles.input} placeholder="CVC" keyboardType="numeric" />
+            <Button title="Pay Now" onPress={handlePayment} />
+            <TouchableOpacity onPress={onBack} style={styles.backButton}><Text style={styles.backButtonText}>Back to Menu</Text></TouchableOpacity>
+        </View>
+    );
+}
+
+/**
+ * The main App component that orchestrates the views.
+ */
+export default function App() {
+  // Use React state to hold the menu items so the UI can react to changes
+  const [menu, setMenu] = useState<IMenuItem[]>([]);
+
+  // State to hold the role of the logged-in user
+  const [userRole, setUserRole] = useState<'user' | 'chef' | null>(null);
+
+  // State to manage navigation between screens
+  const [currentScreen, setCurrentScreen] = useState<'login' | 'menu' | 'addItem' | 'payment'>('login');
+
+  // useEffect runs once when the component mounts to load the initial data
+  useEffect(() => {
+    // Get the initial list from the manager and update the state
+    setMenu(menuManager.getMenu());
+  }, []); // The empty array [] means this effect runs only once
+
+  const handleAddItem = (newItemData: Omit<IMenuItem, 'id'>) => {
+    try {
+      menuManager.addMenuItem(newItemData.name, newItemData.description, newItemData.course, newItemData.price);
+      // Refresh the menu list from the source of truth
+      setMenu([...menuManager.getMenu()]);
+      // Go back to the menu list
+      setCurrentScreen('menu');
+    } catch (error) {
+      if (error instanceof Error) {
+        Alert.alert("Error", `Failed to add item: ${error.message}`);
+      }
+    }
+  };
+
+  const handleLogin = (role: 'user' | 'chef') => {
+    setUserRole(role);
+    setCurrentScreen('menu');
+  };
+
+  const handleLogout = () => {
+    setUserRole(null);
+    setCurrentScreen('login');
+  };
+
+
+  const renderScreen = () => {
+    switch (currentScreen) {
+      case 'login':
+        return <LoginPage onLoginSuccess={handleLogin} />;
+      case 'addItem':
+        return <AddMenuItemForm onAddItem={handleAddItem} onCancel={() => setCurrentScreen('menu')} />;
+      case 'payment':
+        return <PaymentPage menuItems={menu} onBack={() => setCurrentScreen('menu')} />;
+      case 'menu':
+      default:
+        return (
+        <>
+          <View style={styles.logoutButtonContainer}>
+            <Button title="Logout" onPress={handleLogout} color="#ff6347" />
+          </View>
+          <Text style={styles.header}>Menu ({menu.length} items)</Text>
+          <FlatList
+            data={menu}
+            keyExtractor={(item) => item.id.toString()}
+            renderItem={({ item }) => (
+              <TouchableOpacity style={styles.itemContainer}>
+                <Text style={styles.itemName}>{item.name} - ${item.price.toFixed(2)}</Text>
+                <Text style={styles.itemCourse}>({item.course})</Text>
+                <Text style={styles.itemDescription}>{item.description}</Text>
+              </TouchableOpacity>
+            )}
+            ListFooterComponent={
+              <View>
+                {userRole === 'chef' && (
+                  <View style={styles.addButtonContainer}>
+                    <Button title="Add New Item" onPress={() => setCurrentScreen('addItem')} />
+                  </View>
+                )}
+                <View style={styles.addButtonContainer}>
+                  <Button title="Proceed to Payment" onPress={() => setCurrentScreen('payment')} color="#28a745" />
+                </View>
+              </View>
+            }
+          />
+        </>
+        );
+    }
+  };
+
+  return (
+    <ImageBackground
+      source={{ uri: BACKGROUND_IMAGE_URL }}
+      style={styles.backgroundImage}
+      resizeMode="cover"
+    >
+      <View style={styles.overlay}>
+        <SafeAreaView style={styles.container}>
+          {renderScreen()}
+          <StatusBar style="light" />
+        </SafeAreaView>
+      </View>
+    </ImageBackground>
+  );
+}
+
+const styles = StyleSheet.create({
+  header: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    color: '#fff', // Make header text white for better contrast
+    marginVertical: 16,
+  },
+  itemContainer: {
+    backgroundColor: '#fff',
+    padding: 16,
+    marginVertical: 8,
+    marginHorizontal: 16,
+    borderRadius: 8,
+    elevation: 3, // Shadow for Android
+    shadowColor: '#000', // Shadow for iOS
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.22,
+    shadowRadius: 2.22,
+  },
+  itemName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  itemCourse: {
+    fontSize: 14,
+    fontStyle: 'italic',
+    color: '#666',
+    marginBottom: 4,
+  },
+  itemDescription: {
+    fontSize: 14,
+    color: '#333',
+  },
+  addButtonContainer: {
+    margin: 16,
+  },
+  // Styles for the new form
+  formContainer: {
+    flex: 1,
+    padding: 16,
+  },
+  input: {
+    backgroundColor: '#fff',
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    borderRadius: 8,
+    fontSize: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  buttonGroup: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginTop: 20,
+  },
+  // Styles for Payment Page
+  paymentSummary: {
+    fontSize: 18,
+    textAlign: 'center',
+    color: '#fff', // Make summary text white
+    marginVertical: 10,
+  },
+  backButton: {
+    marginTop: 20,
+    padding: 10,
+  },
+  backButtonText: {
+    color: '#007bff',
+    textAlign: 'center',
+    fontSize: 16,
+  },
+  // Styles for the background
+  backgroundImage: {
+    flex: 1,
+  },
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)', // Dark overlay for better text contrast
+  },
+  container: {
+    flex: 1,
+    paddingTop: Platform.OS === 'android' ? RNStatusBar.currentHeight : 0,
+    // The background color is now on the overlay, not the container
+  },
+  logoutButtonContainer: {
+    position: 'absolute',
+    top: Platform.OS === 'android' ? RNStatusBar.currentHeight : 40,
+    right: 10,
+  },
+});
